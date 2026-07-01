@@ -185,6 +185,7 @@ namespace RT64 {
         UserConfiguration::RefreshRate refreshRate;
         UserConfiguration::Filtering filtering;
         UserConfiguration::DivotFilter divotMode;
+        UserConfiguration::PresentFillMode fillMode;
         uint32_t viOriginalRate;
         uint32_t targetRate;
         {
@@ -195,6 +196,7 @@ namespace RT64 {
             refreshRate = ext.sharedResources->userConfig.refreshRate;
             filtering = ext.sharedResources->userConfig.filtering;
             divotMode = ext.sharedResources->userConfig.divotFilter;
+            fillMode = ext.sharedResources->userConfig.presentFillMode;
             viOriginalRate = ext.sharedResources->viOriginalRate;
             targetRate = ext.sharedResources->targetRate;
         }
@@ -417,6 +419,21 @@ namespace RT64 {
                     }
                     renderParams.vi = &present.screenVI;
                     renderParams.removeBlackBorders = removeBlackBorders;
+                    renderParams.fillMode = fillMode;
+                    // Live tuning knob: BAR_PRESENT_FILL = Pillarbox|Crop|Stretch forces the window-fit
+                    // mode regardless of config (parsed once). Handy for A/B testing the letterbox.
+                    static const int barPresentFillOverride = [] {
+                        const char *e = std::getenv("BAR_PRESENT_FILL");
+                        if (e == nullptr) return -1;
+                        const std::string v(e);
+                        if (v == "Pillarbox") return int(UserConfiguration::PresentFillMode::Pillarbox);
+                        if (v == "Crop")      return int(UserConfiguration::PresentFillMode::Crop);
+                        if (v == "Stretch")   return int(UserConfiguration::PresentFillMode::Stretch);
+                        return -1;
+                    }();
+                    if (barPresentFillOverride >= 0) {
+                        renderParams.fillMode = UserConfiguration::PresentFillMode(barPresentFillOverride);
+                    }
 
                     const bool useDownsampling = (colorTarget->downsampleMultiplier > 1);
                     if (useDownsampling) {

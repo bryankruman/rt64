@@ -63,6 +63,18 @@ namespace RT64 {
             OptionCount
         };
 
+        // BAR letterbox control: how the final 4:3 image is fit to a window of a different aspect.
+        //   Pillarbox = preserve aspect, add black bars (default; the original RT64 behavior).
+        //   Crop      = preserve aspect, fill the window, crop the overflow (no bars).
+        //   Stretch   = fill the window, distort to the window's aspect (no bars).
+        // Consumed by VIRenderer::fromHDtoWindow. See docs/HUD_MENU_SYSTEM_MAP.md.
+        enum class PresentFillMode {
+            Pillarbox,
+            Crop,
+            Stretch,
+            OptionCount
+        };
+
         enum class Upscale2D {
             Original,
             ScaledOnly,
@@ -103,6 +115,7 @@ namespace RT64 {
         double aspectTarget;
         AspectRatio extAspectRatio;
         double extAspectTarget;
+        PresentFillMode presentFillMode;   // BAR: window-fit mode for the final present (pillarbox/crop/stretch)
         Upscale2D upscale2D;
         bool threePointFiltering;
         RefreshRate refreshRate;
@@ -140,6 +153,12 @@ namespace RT64 {
         { UserConfiguration::AspectRatio::Original, "Original" },
         { UserConfiguration::AspectRatio::Expand, "Expand" },
         { UserConfiguration::AspectRatio::Manual, "Manual" }
+    });
+
+    NLOHMANN_JSON_SERIALIZE_ENUM(UserConfiguration::PresentFillMode, {
+        { UserConfiguration::PresentFillMode::Pillarbox, "Pillarbox" },
+        { UserConfiguration::PresentFillMode::Crop, "Crop" },
+        { UserConfiguration::PresentFillMode::Stretch, "Stretch" }
     });
 
     NLOHMANN_JSON_SERIALIZE_ENUM(UserConfiguration::Antialiasing, {

@@ -23,20 +23,29 @@ namespace RT64 {
         return coordinate * relativeScale;
     }
 
-    inline hlslpp::float2 fromHDtoWindow(hlslpp::float2 coordinate, hlslpp::float2 hdSize, hlslpp::float2 windowSize) {
+    inline hlslpp::float2 fromHDtoWindow(hlslpp::float2 coordinate, hlslpp::float2 hdSize, hlslpp::float2 windowSize, UserConfiguration::PresentFillMode fillMode) {
         const hlslpp::float2 hdCenter = hdSize / 2;
         const hlslpp::float2 windowCenter = windowSize / 2;
         const hlslpp::float2 relativeCoordinate = { coordinate.x - hdCenter.x, coordinate.y - hdCenter.y };
 
-        // Window is wider than virtual HD TV, we do pillarboxing.
-        float relativeScale;
-        if ((windowSize.x / windowSize.y) > (hdSize.x / hdSize.y)) {
-            relativeScale = windowSize.y / hdSize.y;
+        const float scaleX = windowSize.x / hdSize.x;
+        const float scaleY = windowSize.y / hdSize.y;
+
+        // Stretch: scale each axis independently so the image exactly fills the window
+        // (aspect distorted, but no black bars on either side).
+        if (fillMode == UserConfiguration::PresentFillMode::Stretch) {
+            return { windowCenter.x + relativeCoordinate.x * scaleX, windowCenter.y + relativeCoordinate.y * scaleY };
         }
-        // Window is taller than virtual HD TV, we do letterboxing.
-        else {
-            relativeScale = windowSize.x / hdSize.x;
-        }
+
+        // Uniform scale, preserving the 4:3 aspect:
+        //   Pillarbox (contain, min-scale) — the whole image fits; the long axis gets black bars.
+        //     Wider-than-4:3 window -> left/right pillars; taller window -> top/bottom letterbox.
+        //     This is RT64's original present behavior (the BAR default).
+        //   Crop      (cover,   max-scale) — the image fills the window; the overflow is cut by the
+        //     scissor clamp in getViewportAndScissor, so there are no bars.
+        const float minScale = (scaleX < scaleY) ? scaleX : scaleY;
+        const float maxScale = (scaleX > scaleY) ? scaleX : scaleY;
+        const float relativeScale = (fillMode == UserConfiguration::PresentFillMode::Crop) ? maxScale : minScale;
 
         return windowCenter + relativeCoordinate * relativeScale;
     }
@@ -69,7 +78,7 @@ namespace RT64 {
 
         RenderViewport viewport;
         RenderRect scissor;
-        getViewportAndScissor(p.swapChain, *p.vi, p.resolutionScale, p.downsamplingScale, p.removeBlackBorders, viewport, scissor);
+        getViewportAndScissor(p.swapChain, *p.vi, p.resolutionScale, p.downsamplingScale, p.removeBlackBorders, p.fillMode, viewport, scissor);
         p.commandList->setViewports(viewport);
         p.commandList->setScissors(scissor);
 
@@ -88,7 +97,7 @@ namespace RT64 {
         p.commandList->drawInstanced(3, 1, 0, 0);
     }
 
-    void VIRenderer::getViewportAndScissor(const RenderSwapChain *swapChain, const VI &vi, hlslpp::float2 resolutionScale, uint32_t downsamplingScale, bool removeBlackBorders, RenderViewport &viewport, RenderRect &scissor) {
+    void VIRenderer::getViewportAndScissor(const RenderSwapChain *swapChain, const VI &vi, hlslpp::float2 resolutionScale, uint32_t downsamplingScale, bool removeBlackBorders, UserConfiguration::PresentFillMode fillMode, RenderViewport &viewport, RenderRect &scissor) {
         // We define three different coordinate spaces to work with to translate the VI parameters into the Window.
         //
         // VideoSD: This corresponds to the SD TV Scanline space, which is what the VI natively works on.
@@ -113,15 +122,26 @@ namespace RT64 {
         // Scale all the rectangles to the space of the Window.
         hlslpp::float2 topLeftViewport = fromSDtoHD({ float(viViewRect.x), float(viViewRect.y) }, sdSize, hdSize);
         hlslpp::float2 bottomRightViewport = fromSDtoHD({ float(viViewRect.x + viViewRect.z), float(viViewRect.y + viViewRect.w) }, sdSize, hdSize);
-        topLeftViewport = fromHDtoWindow(topLeftViewport, hdSize, windowSize);
-        bottomRightViewport = fromHDtoWindow(bottomRightViewport, hdSize, windowSize);
+        topLeftViewport = fromHDtoWindow(topLeftViewport, hdSize, windowSize, fillMode);
+        bottomRightViewport = fromHDtoWindow(bottomRightViewport, hdSize, windowSize, fillMode);
 
         hlslpp::float2 topLeftScissor = fromSDtoHD({ float(viCropRect.x), float(viCropRect.y) }, sdSize, hdSize);
         hlslpp::float2 bottomRightScissor = fromSDtoHD({ float(viCropRect.x + viCropRect.z), float(viCropRect.y + viCropRect.w) }, sdSize, hdSize);
-        topLeftScissor = fromHDtoWindow(topLeftScissor, hdSize, windowSize);
-        bottomRightScissor = fromHDtoWindow(bottomRightScissor, hdSize, windowSize);
+        topLeftScissor = fromHDtoWindow(topLeftScissor, hdSize, windowSize, fillMode);
+        bottomRightScissor = fromHDtoWindow(bottomRightScissor, hdSize, windowSize, fillMode);
 
         viewport = RenderViewport(topLeftViewport.x, topLeftViewport.y, bottomRightViewport.x - topLeftViewport.x, bottomRightViewport.y - topLeftViewport.y);
-        scissor = RenderRect(lround(topLeftScissor.x), lround(topLeftScissor.y), lround(bottomRightScissor.x), lround(bottomRightScissor.y));
+
+        // Clamp the scissor to the window bounds. For Crop the image overflows the window, so this
+        // trims the overflow to give a clean fill; for Pillarbox/Stretch the scissor already lies within
+        // the window, so this is a no-op that just guards against off-by-one rounding at the edges.
+        const long winW = lround(windowSize.x);
+        const long winH = lround(windowSize.y);
+        auto clampToWindow = [](long v, long hi) -> int32_t { return int32_t(v < 0 ? 0 : (v > hi ? hi : v)); };
+        scissor = RenderRect(
+            clampToWindow(lround(topLeftScissor.x), winW),
+            clampToWindow(lround(topLeftScissor.y), winH),
+            clampToWindow(lround(bottomRightScissor.x), winW),
+            clampToWindow(lround(bottomRightScissor.y), winH));
     }
 };

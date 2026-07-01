@@ -22,6 +22,7 @@ namespace RT64 {
         j["aspectTarget"] = cfg.aspectTarget;
         j["extAspectRatio"] = cfg.extAspectRatio;
         j["extAspectTarget"] = cfg.extAspectTarget;
+        j["presentFillMode"] = cfg.presentFillMode;
         j["upscale2D"] = cfg.upscale2D;
         j["threePointFiltering"] = cfg.threePointFiltering;
         j["refreshRate"] = cfg.refreshRate;
@@ -46,6 +47,7 @@ namespace RT64 {
         cfg.aspectTarget = j.value("aspectTarget", defaultCfg.aspectTarget);
         cfg.extAspectRatio = j.value("extAspectRatio", defaultCfg.extAspectRatio);
         cfg.extAspectTarget = j.value("extAspectTarget", defaultCfg.extAspectTarget);
+        cfg.presentFillMode = j.value("presentFillMode", defaultCfg.presentFillMode);
         cfg.upscale2D = j.value("upscale2D", defaultCfg.upscale2D);
         cfg.threePointFiltering = j.value("threePointFiltering", defaultCfg.threePointFiltering);
         cfg.refreshRate = j.value("refreshRate", defaultCfg.refreshRate);
@@ -78,6 +80,7 @@ namespace RT64 {
         aspectTarget = 16.0f / 9.0f;
         extAspectRatio = AspectRatio::Original;
         extAspectTarget = 16.0f / 9.0f;
+        presentFillMode = PresentFillMode::Pillarbox;   // BAR: preserve the original letterbox/pillarbox present by default
         upscale2D = Upscale2D::ScaledOnly;
         threePointFiltering = true;
         refreshRate = RefreshRate::Original;
@@ -97,6 +100,7 @@ namespace RT64 {
         clampEnum<DivotFilter>(divotFilter);
         clampEnum<AspectRatio>(aspectRatio);
         clampEnum<AspectRatio>(extAspectRatio);
+        clampEnum<PresentFillMode>(presentFillMode);
         clampEnum<Upscale2D>(upscale2D);
         clampEnum<RefreshRate>(refreshRate);
         clampEnum<InternalColorFormat>(internalColorFormat);

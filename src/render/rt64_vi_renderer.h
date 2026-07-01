@@ -29,6 +29,9 @@ namespace RT64 {
             UserConfiguration::Filtering filtering = UserConfiguration::Filtering::Linear;
             const VI *vi = nullptr;
             bool removeBlackBorders = false;
+            // BAR: how the 4:3 image is fit to the window. Pillarbox (default) preserves the original
+            // letterbox/pillarbox present; Crop fills + crops; Stretch fills + distorts. See fromHDtoWindow.
+            UserConfiguration::PresentFillMode fillMode = UserConfiguration::PresentFillMode::Pillarbox;
             bool divotFilter = false;       // BAR seam fix: apply the VI divot median this present
             float divotThreshold = 0.12f;   // divot outlier gate: higher fills more seams (tolerates surface
                                             // variation across the crack), too high eats 1px detail.
@@ -38,6 +41,6 @@ namespace RT64 {
         VIRenderer();
         ~VIRenderer();
         void render(const RenderParams &p);
-        static void getViewportAndScissor(const RenderSwapChain *swapChain, const VI &vi, hlslpp::float2 resolutionScale, uint32_t downsamplingScale, bool removeBlackBorders, RenderViewport &viewport, RenderRect &scissor);
+        static void getViewportAndScissor(const RenderSwapChain *swapChain, const VI &vi, hlslpp::float2 resolutionScale, uint32_t downsamplingScale, bool removeBlackBorders, UserConfiguration::PresentFillMode fillMode, RenderViewport &viewport, RenderRect &scissor);
     };
 };

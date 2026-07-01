@@ -2043,10 +2043,11 @@ namespace RT64 {
             const hlslpp::float2 resolutionScale = ext.sharedQueueResources->resolutionScale;
             bool removeBlackBorders = ext.sharedQueueResources->enhancementConfig.presentation.removeBlackBorders;
             const uint32_t downsampleMultiplier = ext.userConfig->downsampleMultiplier;
+            const UserConfiguration::PresentFillMode fillMode = ext.userConfig->presentFillMode;
             ext.sharedQueueResources->configurationMutex.unlock();
             RenderViewport viewport;
             RenderRect scissor;
-            VIRenderer::getViewportAndScissor(ext.swapChain, lastScreenVI, resolutionScale, downsampleMultiplier, removeBlackBorders, viewport, scissor);
+            VIRenderer::getViewportAndScissor(ext.swapChain, lastScreenVI, resolutionScale, downsampleMultiplier, removeBlackBorders, fillMode, viewport, scissor);
 
             // Convert the mouse coordinates to native coordinates.
             hlslpp::float2 screenCursorPos;
