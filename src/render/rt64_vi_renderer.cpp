@@ -77,6 +77,8 @@ namespace RT64 {
         pushConstants.videoResolution = computeHDSize(hlslpp::float2(p.vi->fbSize()), p.resolutionScale, p.downsamplingScale);
         pushConstants.textureResolution = { float(p.textureWidth), float(p.textureHeight) };
         pushConstants.gamma = p.vi->gamma();
+        pushConstants.divotFilter = p.divotFilter ? 1u : 0u;   // BAR seam fix: N64 VI divot median
+        pushConstants.divotThreshold = p.divotThreshold;
 
         p.commandList->setPipeline(shader->pipeline.get());
         p.commandList->setGraphicsPipelineLayout(shader->pipelineLayout.get());

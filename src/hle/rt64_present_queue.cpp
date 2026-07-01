@@ -101,6 +101,7 @@ namespace RT64 {
         bool removeBlackBorders;
         UserConfiguration::RefreshRate refreshRate;
         UserConfiguration::Filtering filtering;
+        UserConfiguration::DivotFilter divotMode;
         uint32_t viOriginalRate;
         uint32_t targetRate;
         {
@@ -110,6 +111,7 @@ namespace RT64 {
             removeBlackBorders = ext.sharedResources->enhancementConfig.presentation.removeBlackBorders;
             refreshRate = ext.sharedResources->userConfig.refreshRate;
             filtering = ext.sharedResources->userConfig.filtering;
+            divotMode = ext.sharedResources->userConfig.divotFilter;
             viOriginalRate = ext.sharedResources->viOriginalRate;
             targetRate = ext.sharedResources->targetRate;
         }
@@ -321,6 +323,9 @@ namespace RT64 {
                     renderParams.resolutionScale = colorTarget->resolutionScale;
                     renderParams.downsamplingScale = 1;
                     renderParams.filtering = filtering;
+                    // BAR seam fix (2B): resolve the VI divot mode against the game's divotEnable bit.
+                    renderParams.divotFilter = (divotMode == UserConfiguration::DivotFilter::On)
+                        || (divotMode == UserConfiguration::DivotFilter::Auto && present.screenVI.status.divotEnable);
                     renderParams.vi = &present.screenVI;
                     renderParams.removeBlackBorders = removeBlackBorders;
 

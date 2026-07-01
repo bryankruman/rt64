@@ -48,6 +48,14 @@ namespace RT64 {
             OptionCount
         };
 
+        // BAR seam fix (TODO #2B): N64 VI "divot" filter mode. Auto follows the game's VI divotEnable bit.
+        enum class DivotFilter {
+            Auto,
+            On,
+            Off,
+            OptionCount
+        };
+
         enum class AspectRatio {
             Original,
             Expand,
@@ -90,6 +98,7 @@ namespace RT64 {
         double resolutionMultiplier;
         int downsampleMultiplier;
         Filtering filtering;
+        DivotFilter divotFilter;
         AspectRatio aspectRatio;
         double aspectTarget;
         AspectRatio extAspectRatio;
@@ -144,6 +153,12 @@ namespace RT64 {
         { UserConfiguration::Filtering::Nearest, "Nearest" },
         { UserConfiguration::Filtering::Linear, "Linear" },
         { UserConfiguration::Filtering::AntiAliasedPixelScaling, "AntiAliasedPixelScaling" }
+    });
+
+    NLOHMANN_JSON_SERIALIZE_ENUM(UserConfiguration::DivotFilter, {
+        { UserConfiguration::DivotFilter::Auto, "Auto" },
+        { UserConfiguration::DivotFilter::On, "On" },
+        { UserConfiguration::DivotFilter::Off, "Off" }
     });
 
     NLOHMANN_JSON_SERIALIZE_ENUM(UserConfiguration::Upscale2D, {

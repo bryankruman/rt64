@@ -29,6 +29,8 @@ namespace RT64 {
             UserConfiguration::Filtering filtering = UserConfiguration::Filtering::Linear;
             const VI *vi = nullptr;
             bool removeBlackBorders = false;
+            bool divotFilter = false;       // BAR seam fix: apply the VI divot median this present
+            float divotThreshold = 0.06f;   // outlier gate
         };
 
         VIRenderer();

@@ -21,6 +21,25 @@ float4 SampleInput(float2 uv) {
     return gammaCorrectedColor;
 }
 
+// BAR seam fix (TODO #2B): N64 VI "divot" filter. Per-channel horizontal median-of-3 at native
+// input-texel spacing — fills the 1px see-through holes the RDP leaves where coplanar/abutting
+// polygons meet (hardware fills these at scanout). Gated so it only replaces a center texel that is
+// an outlier vs BOTH horizontal neighbors while those neighbors agree, preserving genuine 1px detail.
+float4 SampleInputDivot(float2 uv) {
+    float4 c = SampleInput(uv);
+    if (gConstants.divotFilter == 0) {
+        return c;
+    }
+    const float2 dx = float2(1.0f / gConstants.textureResolution.x, 0.0f);
+    float3 l = SampleInput(uv - dx).rgb;
+    float3 r = SampleInput(uv + dx).rgb;
+    float3 med = max(min(l, r), min(max(l, r), c.rgb));   // per-channel median of {l, c, r}
+    float3 neighborsAgree = step(abs(l - r), gConstants.divotThreshold);
+    float3 centerIsOutlier = step(gConstants.divotThreshold, abs(c.rgb - med));
+    float3 useMedian = neighborsAgree * centerIsOutlier;
+    return float4(lerp(c.rgb, med, useMedian), c.a);
+}
+
 //
 // Sourced from https://www.shadertoy.com/view/csX3RH
 //
@@ -29,13 +48,13 @@ float4 PixelAntialiasing(float2 uv) {
     float2 seam = floor(uvTexspace + 0.5f);
     uvTexspace = (uvTexspace - seam) / fwidth(uvTexspace) + seam;
     uvTexspace = clamp(uvTexspace, seam - 0.5f, seam + 0.5f);
-    return SampleInput(uvTexspace / gConstants.textureResolution);
+    return SampleInputDivot(uvTexspace / gConstants.textureResolution);
 }
 
 float4 PSMain(in float4 pos : SV_Position, in float2 uv : TEXCOORD0) : SV_TARGET {
 #ifdef PIXEL_ANTIALIASING
     return PixelAntialiasing(uv);
 #else
-    return SampleInput((uv / gConstants.textureResolution) * gConstants.videoResolution);
+    return SampleInputDivot((uv / gConstants.textureResolution) * gConstants.videoResolution);
 #endif
 }

@@ -17,6 +17,7 @@ namespace RT64 {
         j["resolutionMultiplier"] = cfg.resolutionMultiplier;
         j["downsampleMultiplier"] = cfg.downsampleMultiplier;
         j["filtering"] = cfg.filtering;
+        j["divotFilter"] = cfg.divotFilter;
         j["aspectRatio"] = cfg.aspectRatio;
         j["aspectTarget"] = cfg.aspectTarget;
         j["extAspectRatio"] = cfg.extAspectRatio;
@@ -40,6 +41,7 @@ namespace RT64 {
         cfg.resolutionMultiplier = j.value("resolutionMultiplier", defaultCfg.resolutionMultiplier);
         cfg.downsampleMultiplier = j.value("downsampleMultiplier", defaultCfg.downsampleMultiplier);
         cfg.filtering = j.value("filtering", defaultCfg.filtering);
+        cfg.divotFilter = j.value("divotFilter", defaultCfg.divotFilter);
         cfg.aspectRatio = j.value("aspectRatio", defaultCfg.aspectRatio);
         cfg.aspectTarget = j.value("aspectTarget", defaultCfg.aspectTarget);
         cfg.extAspectRatio = j.value("extAspectRatio", defaultCfg.extAspectRatio);
@@ -71,6 +73,7 @@ namespace RT64 {
         resolutionMultiplier = 2.0f;
         downsampleMultiplier = 1;
         filtering = Filtering::AntiAliasedPixelScaling;
+        divotFilter = DivotFilter::Auto;
         aspectRatio = AspectRatio::Original;
         aspectTarget = 16.0f / 9.0f;
         extAspectRatio = AspectRatio::Original;
@@ -91,6 +94,7 @@ namespace RT64 {
         clampEnum<DisplayBuffering>(displayBuffering);
         clampEnum<Antialiasing>(antialiasing);
         clampEnum<Filtering>(filtering);
+        clampEnum<DivotFilter>(divotFilter);
         clampEnum<AspectRatio>(aspectRatio);
         clampEnum<AspectRatio>(extAspectRatio);
         clampEnum<Upscale2D>(upscale2D);
