@@ -30,7 +30,9 @@ namespace RT64 {
             const VI *vi = nullptr;
             bool removeBlackBorders = false;
             bool divotFilter = false;       // BAR seam fix: apply the VI divot median this present
-            float divotThreshold = 0.06f;   // outlier gate
+            float divotThreshold = 0.12f;   // divot outlier gate: higher fills more seams (tolerates surface
+                                            // variation across the crack), too high eats 1px detail.
+                                            // BAR_DIVOT_THRESHOLD overrides at runtime.
         };
 
         VIRenderer();

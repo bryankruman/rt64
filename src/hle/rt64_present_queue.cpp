@@ -409,6 +409,12 @@ namespace RT64 {
                     // BAR seam fix (2B): resolve the VI divot mode against the game's divotEnable bit.
                     renderParams.divotFilter = (divotMode == UserConfiguration::DivotFilter::On)
                         || (divotMode == UserConfiguration::DivotFilter::Auto && present.screenVI.status.divotEnable);
+                    // Live tuning knob: BAR_DIVOT_THRESHOLD overrides the divot outlier gate (read once).
+                    static const char *barDivotThreshEnv = std::getenv("BAR_DIVOT_THRESHOLD");
+                    static const float barDivotThreshOverride = (barDivotThreshEnv != nullptr) ? float(atof(barDivotThreshEnv)) : -1.0f;
+                    if (barDivotThreshOverride >= 0.0f) {
+                        renderParams.divotThreshold = barDivotThreshOverride;
+                    }
                     renderParams.vi = &present.screenVI;
                     renderParams.removeBlackBorders = removeBlackBorders;
 
