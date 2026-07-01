@@ -110,6 +110,10 @@ namespace RT64 {
         PresetSceneLibraryInspector sceneLibraryInspector;
         CameraController cameraController;
         DebuggerInspector debuggerInspector;
+        // Host-driven pause (BeetleRecomp in-game pause menu), set via Application::setPaused. Treated like
+        // debuggerInspector.paused in updateScreen: re-submits the last workload+present every VI tick so the
+        // present thread (and the RmlUi overlay render hook) keep running while the game simulation is frozen.
+        bool externalPaused = false;
         std::stringstream scriptLog;
         ProfilingTimer dlCpuProfiler = ProfilingTimer(120);
         ProfilingTimer screenCpuProfiler = ProfilingTimer(120);

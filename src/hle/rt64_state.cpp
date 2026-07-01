@@ -1809,12 +1809,16 @@ namespace RT64 {
     }
     
     void State::updateScreen(const VI &newVI, bool fromEarlyPresent) {
-        // If the debugger has paused the plugin, keep submitting the last workload and screen VI for rendering and a present event.
-        if (debuggerInspector.paused && !fromEarlyPresent) {
-            if (ext.userConfig->developerMode) {
+        // If the debugger — or the host runtime (BeetleRecomp's in-game pause menu, via externalPaused) — has
+        // paused the plugin, keep submitting the last workload and screen VI for rendering and a present event.
+        // RT64 only presents on a content change (see the viDifferent/fbChangesMade/screenChangesMade gate
+        // below); a frozen simulation never changes RDRAM, so without this the present timeline stalls and any
+        // render hook (e.g. the pause-menu overlay) freezes with it.
+        if ((debuggerInspector.paused || externalPaused) && !fromEarlyPresent) {
+            if (debuggerInspector.paused && ext.userConfig->developerMode) {
                 inspect();
             }
-            
+
             // Wait for the workload and present that has been submitted already to be processed.
             ext.workloadQueue->waitForWorkloadId(workloadId);
             ext.presentQueue->waitForPresentId(presentId);
@@ -1829,7 +1833,7 @@ namespace RT64 {
             ext.workloadQueue->repeatLastWorkload();
             ext.presentQueue->repeatLastPresent();
 
-            if (debuggerInspector.paused) {
+            if (debuggerInspector.paused || externalPaused) {
                 return;
             }
         }

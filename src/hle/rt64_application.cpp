@@ -515,6 +515,13 @@ namespace RT64 {
         state->updateScreen(core.decodeVI(), false);
     }
 
+    // Host-driven pause (BeetleRecomp in-game pause menu). While paused, State::updateScreen re-submits the
+    // last workload+present each VI tick so the present thread (and the overlay render hook) keep running
+    // even though the frozen simulation produces no new frames.
+    void Application::setPaused(bool paused) {
+        state->externalPaused = paused;
+    }
+
     void Application::destroyShaderCache() {
         workloadQueue->waitForWorkloadId(state->workloadId);
         presentQueue->waitForPresentId(state->presentId);
