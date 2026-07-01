@@ -9,6 +9,64 @@
 
 #include "rt64_workload_queue.h"
 
+// ---- BAR: headless internal-render screenshot (env-gated, zero cost unless enabled). Captures the
+// PRESENTED swapchain image via a GPU readback and writes a PNG — no window-manager capture, no focus
+// stealing. Trigger: create the file named by env RT64_SHOT_TRIGGER; the next present copies the frame,
+// writes it to RT64_SHOT_OUT, and deletes the trigger file.
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "../contrib/stb/stb_image_write.h"
+#include <cstdlib>
+#include <cstdio>
+#include <filesystem>
+#include <string>
+#include <vector>
+#include <memory>
+#include <mutex>
+
+// Scripted capture request, set from the game side (BAR_SHOTS in main.cpp, on the same frame timeline as
+// BAR_AUTOPLAY so captures line up exactly with scripted input). A one-shot pending flag consumed here.
+static std::mutex bar_shot_mutex;
+static std::string bar_shot_pending_path;
+static bool bar_shot_pending = false;
+extern "C" void bar_rt64_request_screenshot(const char *path) {
+    std::lock_guard<std::mutex> lk(bar_shot_mutex);
+    bar_shot_pending_path = (path != nullptr) ? path : "";
+    bar_shot_pending = true;
+}
+
+namespace {
+    bool bar_capture_requested(std::string &outPath) {
+        {   // scripted request via bar_rt64_request_screenshot (BAR_SHOTS)
+            std::lock_guard<std::mutex> lk(bar_shot_mutex);
+            if (bar_shot_pending) { bar_shot_pending = false; outPath = bar_shot_pending_path; return true; }
+        }
+        // ad-hoc file trigger (fallback): touch RT64_SHOT_TRIGGER to capture to RT64_SHOT_OUT
+        static const char *trig = std::getenv("RT64_SHOT_TRIGGER");
+        static const char *out  = std::getenv("RT64_SHOT_OUT");
+        if ((trig == nullptr) || (out == nullptr)) return false;
+        std::error_code ec;
+        if (!std::filesystem::exists(trig, ec)) return false;
+        std::filesystem::remove(trig, ec);   // consume the request so we capture exactly once per touch
+        outPath = out;
+        return true;
+    }
+    void bar_capture_write_png(const uint8_t *src, uint32_t w, uint32_t h, uint32_t alignedRowBytes, const std::string &path) {
+        std::vector<uint8_t> rgba((size_t)w * h * 4);
+        for (uint32_t y = 0; y < h; y++) {
+            const uint8_t *row = src + (size_t)y * alignedRowBytes;   // rows are 256-byte aligned in the readback buffer
+            uint8_t *dst = rgba.data() + (size_t)y * w * 4;
+            for (uint32_t x = 0; x < w; x++) {
+                dst[x * 4 + 0] = row[x * 4 + 2];   // swapchain is B8G8R8A8 -> R
+                dst[x * 4 + 1] = row[x * 4 + 1];   // G
+                dst[x * 4 + 2] = row[x * 4 + 0];   // -> B
+                dst[x * 4 + 3] = 255;              // force opaque (swapchain alpha is often 0)
+            }
+        }
+        stbi_write_png(path.c_str(), (int)w, (int)h, 4, rgba.data(), (int)(w * 4));
+        std::fprintf(stderr, "[RT64] screenshot -> %s (%ux%u)\n", path.c_str(), w, h);
+    }
+}
+
 namespace RT64 {
     // PresentQueue
 
@@ -359,6 +417,25 @@ namespace RT64 {
                         inspector->draw(commandList);
                     }
                     
+                    // BAR headless screenshot: record a readback copy of the presented image into a
+                    // mappable buffer before the PRESENT transition; PNG is written after the fence wait.
+                    std::string barShotPath;
+                    std::unique_ptr<RenderBuffer> barShotBuffer;
+                    uint32_t barShotW = 0, barShotH = 0, barShotRowBytes = 0;
+                    if (bar_capture_requested(barShotPath)) {
+                        barShotW = ext.swapChain->getWidth();
+                        barShotH = ext.swapChain->getHeight();
+                        barShotRowBytes = ((barShotW * 4 + 255) / 256) * 256;   // D3D12 256-byte row-pitch alignment
+                        barShotBuffer = ext.device->createBuffer(RenderBufferDesc::ReadbackBuffer((uint64_t)barShotRowBytes * barShotH));
+                        commandList->barriers(RenderBarrierStage::COPY, RenderTextureBarrier(swapChainTexture, RenderTextureLayout::COPY_SOURCE));
+                        // plume's copyTextureRegion programs MSAA sample positions on dstLocation.texture; a
+                        // buffer PlacedFootprint has none (null), which crashes it. Give it the source texture
+                        // (harmless — the copy itself is driven by dst.type=PlacedFootprint -> the buffer).
+                        RenderTextureCopyLocation barDst = RenderTextureCopyLocation::PlacedFootprint(barShotBuffer.get(), RenderFormat::B8G8R8A8_UNORM, barShotW, barShotH, 1, barShotRowBytes / 4, 0);
+                        barDst.texture = swapChainTexture;
+                        commandList->copyTextureRegion(barDst, RenderTextureCopyLocation::Subresource(swapChainTexture, 0, 0));
+                    }
+
                     commandList->barriers(RenderBarrierStage::NONE, RenderTextureBarrier(swapChainTexture, RenderTextureLayout::PRESENT));
                     commandList->end();
                     const RenderCommandList *commandList = ext.presentGraphicsWorker->commandList.get();
@@ -366,6 +443,14 @@ namespace RT64 {
                     RenderCommandSemaphore *signalSemaphore = drawSemaphores[swapChainIndex].get();
                     ext.presentGraphicsWorker->commandQueue->executeCommandLists(&commandList, 1, &waitSemaphore, 1, &signalSemaphore, 1, ext.presentGraphicsWorker->commandFence.get());
                     ext.presentGraphicsWorker->wait();
+
+                    if (barShotBuffer != nullptr) {
+                        const uint8_t *mapped = (const uint8_t *)barShotBuffer->map();
+                        if (mapped != nullptr) {
+                            bar_capture_write_png(mapped, barShotW, barShotH, barShotRowBytes, barShotPath);
+                            barShotBuffer->unmap();
+                        }
+                    }
                 }
             }
 
