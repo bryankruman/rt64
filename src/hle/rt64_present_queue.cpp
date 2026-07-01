@@ -34,8 +34,33 @@ extern "C" void bar_rt64_request_screenshot(const char *path) {
     bar_shot_pending = true;
 }
 
+// Burst capture: record the next N presents to <dir>/fNNNN.png, one per present. Needed for animations
+// the input-frame timeline can't sample -- e.g. the main-menu film-roll, during which the game blocks in
+// a render loop and never polls input, so BAR_SHOTS frames freeze. RT64 counts presents itself here.
+static std::mutex bar_burst_mutex;
+static std::string bar_burst_dir;
+static int bar_burst_remaining = 0;
+static int bar_burst_index = 0;
+extern "C" void bar_rt64_start_burst(const char *dir, int count) {
+    std::lock_guard<std::mutex> lk(bar_burst_mutex);
+    bar_burst_dir = (dir != nullptr) ? dir : "";
+    bar_burst_remaining = count;
+    bar_burst_index = 0;
+}
+
 namespace {
     bool bar_capture_requested(std::string &outPath) {
+        {   // burst capture (bar_rt64_start_burst): one numbered PNG per present until exhausted
+            std::lock_guard<std::mutex> lk(bar_burst_mutex);
+            if (bar_burst_remaining > 0) {
+                char name[64];
+                std::snprintf(name, sizeof(name), "/f%04d.png", bar_burst_index);
+                outPath = bar_burst_dir + name;
+                bar_burst_index++;
+                bar_burst_remaining--;
+                return true;
+            }
+        }
         {   // scripted request via bar_rt64_request_screenshot (BAR_SHOTS)
             std::lock_guard<std::mutex> lk(bar_shot_mutex);
             if (bar_shot_pending) { bar_shot_pending = false; outPath = bar_shot_pending_path; return true; }
