@@ -5,6 +5,7 @@
 #include "rt64_interpreter.h"
 
 #include <cassert>
+#include <cstdio>
 
 //#define DUMP_DISPLAY_LISTS
 
@@ -154,6 +155,18 @@ namespace RT64 {
     }
 
     void Interpreter::processDisplayLists(uint32_t dlStartAdddress, DisplayList *dlStart) {
+        // If loadUCodeGBI couldn't identify this task's microcode (gbiManager.getGBIForUCode returned
+        // null), hleGBI stays null. Upstream only guarded that with the debug assert below, which is
+        // compiled out in Release — so the dispatch loop's `hleGBI->map[opCode]` dereferences null and
+        // crashes. BAR's "Beetle Battle" mode hit exactly this. Skip the display list instead.
+        if (hleGBI == nullptr) {
+            static bool warned = false;
+            if (!warned) {
+                fprintf(stderr, "[RT64] processDisplayLists: no HLE GBI for task (unrecognized microcode); skipping display list\n");
+                warned = true;
+            }
+            return;
+        }
         assert(hleGBI != nullptr);
 
         state->dlCpuProfiler.start();
@@ -169,7 +182,28 @@ namespace RT64 {
         DisplayList *dl = dlStart;
         uint8_t opCode;
         GBIFunction func;
+        // BAR: bound the walk to the RDRAM extent. The HLE loop has no end pointer and terminates only
+        // when a command (G_ENDDL) nulls `dl`; a malformed display list, or a branch/call to a segment
+        // RT64 can't resolve, otherwise advances `dl` into unmapped memory and crashes on the next opcode
+        // read (BAR's "Beetle Battle" hit exactly this). Stop safely at the RDRAM boundary instead, and
+        // report the command that last redirected `dl` so the root cause can be pinned down.
+        uint8_t *const rdramLo = state->RDRAM;
+        uint8_t *const rdramHi = state->RDRAM + RDRAMSize;   // last valid RDRAM byte (RT64::RDRAMSize)
+        uint8_t prevOpCode = 0xFF;
+        uint32_t cmdCount = 0;
         while (dl != nullptr) {
+            if (reinterpret_cast<uint8_t *>(dl) < rdramLo ||
+                (reinterpret_cast<uint8_t *>(dl) + sizeof(DisplayList) - 1) > rdramHi) {
+                static int logged = 0;
+                if (logged++ < 8) {
+                    fprintf(stderr, "[RT64][BAR] display list walked out of RDRAM after %u cmds "
+                            "(dl=%p, rdram=%p..%p, prev opcode=0x%02X) - stopping to avoid a crash\n",
+                            cmdCount, reinterpret_cast<void *>(dl),
+                            reinterpret_cast<void *>(rdramLo), reinterpret_cast<void *>(rdramHi), prevOpCode);
+                }
+                break;
+            }
+
             opCode = (dl->w0 >> 24);
 
             if ((extendedOpCode != 0) && (opCode == extendedOpCode)) {
@@ -190,6 +224,8 @@ namespace RT64 {
                 }
             }
 
+            prevOpCode = opCode;
+            cmdCount++;
             if (dl != nullptr) {
                 dl++;
             }
